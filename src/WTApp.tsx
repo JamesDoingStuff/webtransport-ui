@@ -3,10 +3,10 @@ import { Button, Stack, TextField } from '@mui/material';
 import { useRef, useState } from 'react';
 
 
-
 function App() { 
   const [address, setAddress] = useState("https://localhost:4433/tempcontroller");
-  const [data, setData] = useState("Test data")
+  const [data, setData] = useState("12")
+  const [currentValue, setCurrentValue] = useState("0")
   const wt = useRef<WebTransport|null>(null);
   const writer = useRef<WritableStreamDefaultWriter|null>(null);
 
@@ -23,8 +23,8 @@ function App() {
   function sendWriterData(writer: WritableStreamDefaultWriter | null) {
     const encoder = new TextEncoder()
     const payload = encoder.encode(data)
+
     if(writer){
-      // const TEST_DATA = new Uint8Array([3,6,9]);
       writer.write(payload);
     }
   }
@@ -39,7 +39,6 @@ function App() {
 
   async function connect(url: string) {
     await initTransport(url);
-    // setWt(transport)
     if (!wt.current) {
       console.log("Null transport");
       return;
@@ -53,12 +52,14 @@ function App() {
     async function read() {
       const decoder = new TextDecoder();
       while (true) {
+        console.log("Loop executed")
         const { value, done } = await reader.read();
         if (done) {
           break
         }
-        const received_data = decoder.decode(value);
+        const received_data = decoder.decode(value, {stream: true});
         console.log(`Value received: ${received_data}\n`)
+        setCurrentValue(received_data);
       }
     }
 
@@ -68,7 +69,6 @@ function App() {
 
 
   return (
-      <>
         <Stack>
         <TextField 
           label="Device path"
@@ -80,11 +80,19 @@ function App() {
         >
           Connect
         </Button>
-        <TextField
-          label="Data to send"
-          defaultValue="Test data"
-          onChange={(e) => setData(e.target.value)}
-        />
+        <Stack direction='row'>
+          <TextField
+            value={currentValue}
+            label="Temperature"
+            fullWidth
+          />
+          <TextField
+            label="Set Temperature"
+            defaultValue="293"
+            onChange={(e) => setData(e.target.value)}
+            fullWidth
+          />
+        </Stack>
         <Button
           onClick={() => sendWriterData(writer.current)}
         >
@@ -96,7 +104,6 @@ function App() {
           Close connection
         </Button>
         </Stack>
-      </>
   )
 }
 
