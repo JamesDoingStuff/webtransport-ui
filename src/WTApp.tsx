@@ -1,4 +1,3 @@
-// import { useEffect, useState } from 'react'
 import { Button, Stack, TextField } from '@mui/material';
 import { useRef, useState } from 'react';
 import { AppBar, Toolbar } from '@mui/material';
@@ -18,9 +17,7 @@ function App() {
 
   async function initTransport(url: string) {
     wt.current = new WebTransport(url);
-
-    if (wt.current) {await wt.current.ready}
-    else console.log("Transport does not exist")
+    await wt.current.ready
 
     console.log("Transport created")
     return;
@@ -35,7 +32,7 @@ function App() {
     }
   }
 
-  async function closeWriter() {
+  async function closeConnection() {
 
     if (writer.current) {
       await writer.current.close().then(() => console.log("Closed writer.")
@@ -106,7 +103,7 @@ function App() {
       <Stack spacing={2}>
         <TextField 
           label="Device path"
-          defaultValue={address}
+          value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
         <Typography align='center'>
@@ -121,7 +118,7 @@ function App() {
             Connect
           </Button>
           <Button 
-            onClick={() => closeWriter()}
+            onClick={() => closeConnection()}
             disabled={!isConnected}
           >
             Close connection
