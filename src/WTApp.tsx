@@ -1,5 +1,5 @@
-import { Button, Stack, TextField } from '@mui/material';
-import { useRef, useState } from 'react';
+import { Button, Stack, TextField, Box } from '@mui/material';
+import { useEffect, useState } from 'react';
 import { AppBar, Toolbar } from '@mui/material';
 import { Typography } from '@mui/material';
 import { Footer } from '@diamondlightsource/sci-react-ui';
@@ -7,7 +7,17 @@ import { styled } from '@mui/material/styles'
 
 const Offset = styled('div')(({ theme }) => theme.mixins.toolbar);
 
-function ConnectionField(setReader, setWriter) {
+interface ConnectionFieldProps {
+  wt: WebTransport | null;
+  setWt: React.Dispatch<React.SetStateAction<WebTransport | null>>;
+}
+
+interface PvFieldProps {
+  pvName: string;
+  wt: WebTransport | null
+}
+
+function ConnectionField({ wt, setWt }: ConnectionFieldProps) {
   const [address, setAddress] = useState("https://localhost:4433/tempcontroller");
   const [isConnected, setIsConnected] = useState(false)
 
@@ -19,7 +29,7 @@ function ConnectionField(setReader, setWriter) {
     return wt;
   }
 
-  async function connect() {
+  async function create_transport() {
     let wt = null
     try {wt = await initTransport()}
     catch {
@@ -32,51 +42,24 @@ function ConnectionField(setReader, setWriter) {
       return;
     }
     setIsConnected(true);
-    const stream = await wt.createBidirectionalStream();
+    setWt(wt)
+    // const stream = await wt.createBidirectionalStream();
 
-    setWriter(stream.writable.getWriter())
-    setReader(stream.readable.getReader())
+    // setWriter(stream.writable.getWriter())
+    // setReader(stream.readable.getReader())
   }
 
-
-  async function closeConnection(writer) {
-
-    if (writer) {
-      await writer.close().then(() => console.log("Closed writer.")
-      ).catch(() => console.log("Writer went badly."))
-      
-      setWriter(null)
-    }
-      
-    // if (wt)  {
-    //   wt.close({
-    //     closeCode: 17,
-    //     reason: "CloseButtonPressed",
-    //   });
-    //   await wt.closed.then(() => console.log("Closed transport gracefully.")
-    //   ).catch((err) => console.log(`Transport died kicking and screaming: ${err}`))
-    //   wt = null
-    }
-
-    setIsConnected(false);
-  
-    
-  //   async function read() {
-  //     const decoder = new TextDecoder();
-  //     while (true) {
-  //       const { value, done } = await reader.read();
-  //       if (done) {
-  //         break
-  //       }
-  //       const received_data = decoder.decode(value, {stream: true});
-  //       console.log(`Value received: ${received_data}\n`)
-  //       setCurrentValue(received_data);
-  //     }
-  //   }
-
-  //   read();
-  //   return;
-  // }
+  async function closeConnection() {
+    console.log("Called the function")
+    if(wt) {
+      try{wt.close()}
+      catch{console.log("There was an error :(")}
+      setWt(null);
+      setIsConnected(false);
+      return
+      // await wt.closed;
+    };
+  }
 
   return(
     <>
@@ -87,14 +70,14 @@ function ConnectionField(setReader, setWriter) {
       />
       <Typography align='center'>
         <Button
-          onClick={() => connect()}
+          onClick={() => create_transport()}
           variant='contained'
           style={{ 
             maxWidth: "100px",
           }}
           disabled={isConnected}
         >
-          Connect
+          Create Transport
         </Button>
         <Button 
           onClick={() => closeConnection()}
@@ -107,27 +90,103 @@ function ConnectionField(setReader, setWriter) {
   )
 }
 
-function App() { 
-  const [data, setData] = useState("0")
+function PvField({ pvName, wt }: PvFieldProps){
   const [currentValue, setCurrentValue] = useState("0")
-  
-  const [wt, setWt] = useState<WebTransport|null>(null);
+  const [targetValue, setTargetValue] = useState("0")
   const [writer, setWriter] = useState<WritableStreamDefaultWriter|null>(null);
-  const [reader, setReader] = useState<ReadableStreamDefaultReader|null>(null);
 
-  
 
-  function sendWriterData(writer: WritableStreamDefaultWriter | null) {
+  function send_value(writer: WritableStreamDefaultWriter | null) {
     const encoder = new TextEncoder()
-    const payload = encoder.encode(data)
+    const json_payload = `{"pv":"${pvName}", "value":"${targetValue}"}`
+    const payload = encoder.encode(json_payload)
 
     if(writer){
       writer.write(payload);
-    }
+      console.log(`Sent data: ${json_payload}`)
+    } else (console.log("No writer"))
   }
+  useEffect(() => {
+    if (!wt) {
+      console.log("Null webtransport")
+      return;
+    }
 
-  
+    let isActive = true;
 
+
+    (async () => {
+      console.log("Running the read loop")
+      const stream = await wt!.createBidirectionalStream();
+      console.log("New stream created")
+      setWriter(stream.writable.getWriter())
+      const reader = stream.readable.getReader()
+
+      const decoder = new TextDecoder();
+      try{
+        while (isActive && reader) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break
+          }
+          const received_data = decoder.decode(value, {stream: true});
+          console.log(`Value received: ${received_data}\n`)
+          setCurrentValue(received_data);
+        }
+      }
+      catch (err) {
+        console.log(err)
+      }
+
+
+    })();
+
+    return () => {
+      console.log("Running cleanup")
+      isActive = false;
+      // if (writer){
+      //   writer.close()
+      //   setWriter(null)
+      // }
+      // if (reader){
+      //   reader.cancel()
+      //   setReader(null)
+      // }
+    }
+
+
+    }, [wt])
+
+  return(
+    <Stack direction='row' spacing={2}>
+      <Box width={'100%'} alignContent={'center'} justifyContent={'center'}> 
+        <Typography>
+          {pvName}: 
+        </Typography>
+      </Box>
+        <TextField
+          value={currentValue}
+          label="Current"
+          fullWidth
+        />
+        <TextField
+          label="Set"
+          defaultValue="0"
+          onChange={(e) => setTargetValue(e.target.value)}
+          fullWidth
+        />
+      <Button
+          onClick={() => send_value(writer)}
+          fullWidth
+        >
+          Send target value
+      </Button>
+    </Stack>
+  )
+}
+
+function App() { 
+  const [wt, setWt] = useState<WebTransport|null>(null);
 
   return (
     <>
@@ -140,25 +199,10 @@ function App() {
       </AppBar>
       <Offset/>
       <Stack spacing={2}>
-      <ConnectionField setReader={setReader} setWriter={setWriter}/>
-      <Stack direction='row'>
-        <TextField
-          value={currentValue}
-          label="Temperature"
-          fullWidth
-        />
-        <TextField
-          label="Set Temperature"
-          defaultValue="0"
-          onChange={(e) => setData(e.target.value)}
-          fullWidth
-        />
-      </Stack>
-      <Button
-          onClick={() => sendWriterData(writer)}
-        >
-          Send test stream data
-      </Button>
+        <ConnectionField wt={wt} setWt={setWt}/>
+        <PvField pvName="Temperature"  wt={wt}></PvField>
+        <PvField pvName="Temperature 2"  wt={wt}></PvField>
+        <PvField pvName="Temperature 3"  wt={wt}></PvField>
       </Stack>
       <Footer logo="theme" color="primary" position='fixed' width="100%"/>
     </>
