@@ -98,7 +98,7 @@ function PvField({ pvName, wt }: PvFieldProps){
 
   function send_value(writer: WritableStreamDefaultWriter | null) {
     const encoder = new TextEncoder()
-    const json_payload = `{"pv":"${pvName}", "value":"${targetValue}"}`
+    const json_payload = `{"pv":"${pvName}", "value":"${targetValue}", "command":"set"}`
     const payload = encoder.encode(json_payload)
 
     if(writer){
@@ -120,9 +120,16 @@ function PvField({ pvName, wt }: PvFieldProps){
       const stream = await wt!.createBidirectionalStream();
       console.log("New stream created")
       setWriter(stream.writable.getWriter())
-      const reader = stream.readable.getReader()
 
+      const reader = stream.readable.getReader()
       const decoder = new TextDecoder();
+
+      if (writer){
+        // TODO: Add GET and SET commands here
+        const payload = `{ "pv": "${pvName}", "command": "set" }`
+        console.log("Opening command sent: " + payload)
+        writer.write(payload)
+      }
       try{
         while (isActive && reader) {
           const { value, done } = await reader.read();
@@ -155,7 +162,7 @@ function PvField({ pvName, wt }: PvFieldProps){
     }
 
 
-    }, [wt])
+    }, [wt, pvName])
 
   return(
     <Stack direction='row' spacing={2}>
