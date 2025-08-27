@@ -93,42 +93,54 @@ function ConnectionField({ wt, setWt }: ConnectionFieldProps) {
 function PvField({ pvName, wt }: PvFieldProps){
   const [currentValue, setCurrentValue] = useState("0")
   const [targetValue, setTargetValue] = useState("0")
-  const [writer, setWriter] = useState<WritableStreamDefaultWriter|null>(null);
+  // const [writer, setWriter] = useState<WritableStreamDefaultWriter|null>(null);
+  const [stream, setStream] = useState<WebTransportBidirectionalStream|null>(null)
 
 
-  function send_value(writer: WritableStreamDefaultWriter | null) {
+  function send_value() {
     const encoder = new TextEncoder()
     const json_payload = `{"pv":"${pvName}", "value":"${targetValue}", "command":"set"}`
     const payload = encoder.encode(json_payload)
 
+    const writer = stream?.writable.getWriter()
     if(writer){
       writer.write(payload);
       console.log(`Sent data: ${json_payload}`)
     } else (console.log("No writer"))
+    writer?.releaseLock()
   }
+
   useEffect(() => {
     if (!wt) {
       console.log("Null webtransport")
       return;
     }
+    (async () => {setStream(await wt.createBidirectionalStream())})();
+    console.log("New stream created")
+    
+  },[wt])
+
+  useEffect(() => {
+    
 
     let isActive = true;
 
 
     (async () => {
       console.log("Running the read loop")
-      const stream = await wt!.createBidirectionalStream();
-      console.log("New stream created")
-      setWriter(stream.writable.getWriter())
-
-      const reader = stream.readable.getReader()
+      
+      const writer = stream?.writable.getWriter()
+      const reader = stream?.readable.getReader()
       const decoder = new TextDecoder();
 
       if (writer){
         // TODO: Add GET and SET commands here
-        const payload = `{ "pv": "${pvName}", "command": "set" }`
+        const raw_data = `{ "pv": "${pvName}", "command": "set" }`
+        const encoder = new TextEncoder()
+        const payload = encoder.encode(raw_data)
         console.log("Opening command sent: " + payload)
         writer.write(payload)
+        writer.releaseLock()
       }
       try{
         while (isActive && reader) {
@@ -162,7 +174,7 @@ function PvField({ pvName, wt }: PvFieldProps){
     }
 
 
-    }, [wt, pvName])
+    }, [wt, pvName, stream])
 
   return(
     <Stack direction='row' spacing={2}>
@@ -183,7 +195,7 @@ function PvField({ pvName, wt }: PvFieldProps){
           fullWidth
         />
       <Button
-          onClick={() => send_value(writer)}
+          onClick={() => send_value()}
           fullWidth
         >
           Send target value
