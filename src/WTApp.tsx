@@ -1,11 +1,15 @@
-import { Button, Stack, TextField, Box } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { Button, Stack, TextField, Box, Divider } from '@mui/material';
+import { useEffect, useState, useRef } from 'react';
 import { AppBar, Toolbar } from '@mui/material';
 import { Typography } from '@mui/material';
 import { Footer } from '@diamondlightsource/sci-react-ui';
 import { styled } from '@mui/material/styles'
 
 const Offset = styled('div')(({ theme }) => theme.mixins.toolbar);
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 interface ConnectionFieldProps {
   wt: WebTransport | null;
@@ -204,6 +208,72 @@ function PvField({ pvName, wt }: PvFieldProps){
   )
 }
 
+function StressTester() {
+  const [numStreams, setNumStreams] = useState(0)
+  const isRunning = useRef(false)
+
+
+  async function handleStressTest() {
+    console.log("Handling...")
+    isRunning.current = true
+
+    const wt = new WebTransport("https://localhost:4433/stress")
+    const writer_array = [];
+
+    await wt.ready
+    console.log("Finished awaiting")
+
+    for (let streamNum=0;streamNum < numStreams; streamNum++) {
+      const stream = await wt.createBidirectionalStream()
+      const writer = stream.writable.getWriter();
+      writer_array.push(writer)
+    }
+    console.log("Finished creating streams")
+    console.log(`Running: ${isRunning}`)
+    
+    let i = 0
+    
+    while(isRunning.current){
+      console.log("Starting the loop")
+      for (const [stream_number, writer] of writer_array.entries()) {
+        const encoder = new TextEncoder();
+        const payload = encoder.encode(`n = ${stream_number}, i = ${i}`)
+
+        
+        console.log("Sending mass data: ", `${stream_number} on iteration ${i}`)
+        await writer.write(payload)
+        await sleep(10)
+      }
+      i++;
+    }
+    console.log("Skipped the loop :(")
+    wt.close()
+  }
+
+
+
+  return (
+    <Stack direction="row" spacing={2}>
+      <TextField 
+        onChange={(e) => setNumStreams(Number(e.target.value))}
+        label='Number of streams'
+      />
+    <Button
+      onClick={() => handleStressTest()}
+      variant='contained'
+    >
+      Stress test
+    </Button>
+    <Button 
+      onClick={() => isRunning.current=false}
+    >
+      Stop!
+    </Button>
+    </Stack>
+  )
+}
+
+
 function App() { 
   const [wt, setWt] = useState<WebTransport|null>(null);
 
@@ -222,6 +292,11 @@ function App() {
         <PvField pvName="Temperature"  wt={wt}></PvField>
         <PvField pvName="Temperature 2"  wt={wt}></PvField>
         <PvField pvName="Temperature 3"  wt={wt}></PvField>
+        <Divider/>
+        <Typography>
+          Stress Tester:
+        </Typography>
+        <StressTester/>
       </Stack>
       <Footer logo="theme" color="primary" position='fixed' width="100%"/>
     </>
