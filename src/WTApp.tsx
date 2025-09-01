@@ -208,7 +208,7 @@ function PvField({ pvName, wt }: PvFieldProps){
   )
 }
 
-function StressTester() {
+function MuxStressTester() {
   const [numStreams, setNumStreams] = useState(0)
   const isRunning = useRef(false)
 
@@ -273,6 +273,56 @@ function StressTester() {
   )
 }
 
+function SeparateStressTester() {
+  const [numTransports, setNumTransports] = useState(0);
+  const isRunning = useRef(false)
+
+  async function handleStressTest() {
+    isRunning.current = true
+
+
+    for (let i = 0; i < numTransports; ){
+      const webtransport = new WebTransport("https://localhost:4433/stress");
+      await webtransport.ready
+      const stream = await webtransport.createBidirectionalStream();
+      const writer = stream.writable.getWriter();
+
+      const encoder = new TextEncoder()
+      const payload = encoder.encode(`Data: ${i}`)
+      
+      while (isRunning) {
+        writer.write(payload)
+      }
+      
+      webtransport.close()
+
+      
+    }
+
+
+  }
+
+  return (
+    <Stack direction="row" spacing={2}>
+      <TextField 
+        onChange={(e) => setNumTransports(Number(e.target.value))}
+        label='Number of streams'
+      />
+    <Button
+      onClick={() => handleStressTest()}
+      variant='contained'
+    >
+      Stress test
+    </Button>
+    <Button 
+      onClick={() => isRunning.current=false}
+    >
+      Stop!
+    </Button>
+    </Stack>
+  )
+}
+
 
 function App() { 
   const [wt, setWt] = useState<WebTransport|null>(null);
@@ -294,9 +344,14 @@ function App() {
         <PvField pvName="Temperature 3"  wt={wt}></PvField>
         <Divider/>
         <Typography>
-          Stress Tester:
+          Multiplexed Streams Stress Tester:
         </Typography>
-        <StressTester/>
+        <MuxStressTester/>
+        <Divider/>
+        <Typography>
+          Separate Transport Stress Tester
+        </Typography>
+        <SeparateStressTester/>
       </Stack>
       <Footer logo="theme" color="primary" position='fixed' width="100%"/>
     </>
